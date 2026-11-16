@@ -185,15 +185,32 @@ def kernel_spectrum(X, kernel=None, depth=1, M=5000, seed=0):
     # return np.clip(np.linalg.eigvalsh((K / len(idx)).numpy())[::-1], 1e-300, None)
     return np.linalg.eigvalsh((K / len(idx)).numpy())[::-1]
 
+def kernel_spectrum_gpu(X, kernel=None, depth=1, M=None, seed=0, chunk=5000, dev=None): 
+    dev = dev or ('cuda' if torch.cuda.is_available() else 'cpu')
+    rng = np.random.default_rng(seed)
+    if M is not None: X = np.asarray(X)[rng.choice(len(X), min(M, len(X)), replace=False)]
+    X = torch.as_tensor(np.asarray(X), dtype=torch.float64, device=dev)
+    N = len(X) 
+    K = torch.empty((N,N), dtype=torch.float64, device=dev)
+    for i in range(0, N, chunk): 
+        if kernel == "NTK": K[i:i+chunk] = ntk(X[i:i+chunk], X, depth) 
+        if kernel == "Laplace": K[i:i+chunk] = laplace(X[i:i+chunk], X) 
+    # ev = torch.linalg.eigvalsh(K / N).flip(0).cpu().numpy(); 
+    K /= N
+    ev = torch.linalg.eigvalsh(K).flip(0).cpu().numpy()
+    del K, X; torch.cuda.empty_cache()
+    return ev
 
-def kernel_spectrum_lanczos(X, kernel=None, k=2000, chunk=5000, dev='cuda'):   # top-k NTK eigenvalues using all N rows, never forms NxN
-    X = torch.as_tensor(X, dtype=torch.float64, device=dev)
-    K = ntk if kernel == "NTK" else laplace if kernel == "Laplace" else None
+
+def kernel_spectrum_lanczos(X, kernel=None, depth=1, k=2000, chunk=5000, dev=None, dtype=torch.float64):   # top-k eigenvalues using all N rows, never forms NxN
+    dev = dev or ('cuda' if torch.cuda.is_available() else 'cpu')
+    X = torch.as_tensor(np.asarray(X), dtype=dtype, device=dev)
+    K = (lambda a, b: ntk(a, b, depth)) if kernel == "NTK" else laplace if kernel == "Laplace" else None
     def Kv(v):
-        v = torch.as_tensor(np.asarray(v, dtype=np.float64), device=dev).ravel(); 
-        out = torch.empty(len(X), dtype=torch.float64, device=dev)
+        v = torch.as_tensor(np.asarray(v, dtype=np.float64), dtype=dtype, device=dev).ravel()
+        out = torch.empty(len(X), dtype=dtype, device=dev)
         for i in range(0, len(X), chunk): out[i:i+chunk] = K(X[i:i+chunk], X) @ v
-        return (out / len(X)).cpu().numpy()
+        return (out / len(X)).double().cpu().numpy()
     return eigsh(LinearOperator((len(X), len(X)), matvec=Kv, dtype=np.float64), k=k, which='LA', return_eigenvectors=False)[::-1]
 
 
