@@ -226,6 +226,14 @@ def alpha(ev, lo=50, hi=1000):
     return 1 - np.polyfit(np.log(k[lo:hi]), np.log(tail[lo:hi]), 1)[0]
 
 
+def local_slope(lam, k=None, kmax=1000, w=1):
+    """alpha(k) = -dlog(lam)/dlog(k) from a linear fit over |log k' - log k| <= w."""
+    k = np.arange(1, len(lam) + 1) if k is None else np.asarray(k); m = (lam > 0) & (k <= kmax)
+    lk, ll = np.log(k[m]), np.log(lam[m])
+    a = [-np.polyfit(lk[np.abs(lk - x) <= w], ll[np.abs(lk - x) <= w], 1)[0] if (np.abs(lk - x) <= w).sum() > 2 else np.nan for x in lk]
+    return k[m], np.array(a)
+
+
 
 
 
