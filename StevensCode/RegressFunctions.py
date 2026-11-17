@@ -39,7 +39,8 @@ def ridge_fit(X_train, y_train, X_test, λ=1e-8, center=False, y_mean=None, kern
 
 
 def run_regression_sweep(X, y, train_sizes, λ=1e-8, n_repeats=250, test_size=0.2, w_true=None, 
-                         filter_zero_var=False, center=False, scale=False, kern=None):
+                         filter_zero_var=False, center=False, scale=False, kern=None, dev=None):
+    dev = 'cuda' if torch.cuda.is_available() else 'cpu'
     X, y = np.array(X), np.array(y)
     idx = np.random.default_rng(42).permutation(len(X))
     X, y = X[idx], y[idx]
@@ -64,8 +65,8 @@ def run_regression_sweep(X, y, train_sizes, λ=1e-8, n_repeats=250, test_size=0.
 ########## Define NTK kernel  ################
     if kern == "NTK":
         print(X_train_s.shape, X_test_s.shape, f"{8*len(X_train_s)**2/1e9:.1f} GB per train Gram")
-        Xtr_t = torch.tensor(X_train_s, dtype=torch.float64)
-        Xte_t = torch.tensor(X_test_s,  dtype=torch.float64)
+        Xtr_t = torch.tensor(X_train_s, dtype=torch.float64, device=dev)
+        Xte_t = torch.tensor(X_test_s,  dtype=torch.float64, device=dev)
         # G_tr = ntk(Xtr_t, Xtr_t)
         # G_te = ntk(Xte_t, Xtr_t)
 ##############################################
@@ -79,13 +80,13 @@ def run_regression_sweep(X, y, train_sizes, λ=1e-8, n_repeats=250, test_size=0.
             # y_pred = ridge_fit(X_train_s[sub_idx], y_train[sub_idx], X_test_s, λ, center=center, y_mean=y_global_mean, kernel=kern)
 ################################################################
             if kern == "NTK":
-                s_ = torch.as_tensor(sub_idx)
+                s_ = torch.as_tensor(sub_idx, device=dev)
                 Ktr, Kte = ntk(Xtr_t[s_], Xtr_t[s_]), ntk(Xte_t, Xtr_t[s_])
-                A  = Ktr + λ * n * torch.eye(n, dtype=torch.float64)
+                A  = Ktr + λ * n * torch.eye(n, dtype=torch.float64, device=dev)
                 ym = y_global_mean if center else 0.0
-                yt = torch.tensor(y_train[sub_idx] - ym, dtype=torch.float64)
+                yt = torch.tensor(y_train[sub_idx] - ym, dtype=torch.float64, device=dev)
                 # y_pred = (G_te[:, s_] @ torch.linalg.solve(A, yt)).numpy()
-                y_pred = (Kte @ torch.linalg.solve(A, yt)).numpy() + ym
+                y_pred = (Kte @ torch.linalg.solve(A, yt)).cpu().numpy() + ym
             else:
                 y_pred = ridge_fit(X_train_s[sub_idx], y_train[sub_idx], X_test_s, λ, center=center, y_mean=y_global_mean, kernel=kern)
 ################################################################
