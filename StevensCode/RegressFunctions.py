@@ -39,7 +39,7 @@ def ridge_fit(X_train, y_train, X_test, λ=1e-8, center=False, y_mean=None, kern
 
 
 def run_regression_sweep(X, y, train_sizes, λ=1e-8, n_repeats=250, test_size=0.2, w_true=None, 
-                         filter_zero_var=False, center=False, scale=False, kern=None, dev=None):
+                         filter_zero_var=False, center=False, scale=False, kern=None, depth=1, dev=None):
     dev = 'cuda' if torch.cuda.is_available() else 'cpu'
     X, y = np.array(X), np.array(y)
     idx = np.random.default_rng(42).permutation(len(X))
@@ -81,7 +81,7 @@ def run_regression_sweep(X, y, train_sizes, λ=1e-8, n_repeats=250, test_size=0.
 ################################################################
             if kern == "NTK":
                 s_ = torch.as_tensor(sub_idx, device=dev)
-                Ktr, Kte = ntk(Xtr_t[s_], Xtr_t[s_]), ntk(Xte_t, Xtr_t[s_])
+                Ktr, Kte = ntk(Xtr_t[s_], Xtr_t[s_], depth), ntk(Xte_t, Xtr_t[s_], depth)
                 A  = Ktr + λ * n * torch.eye(n, dtype=torch.float64, device=dev)
                 ym = y_global_mean if center else 0.0
                 yt = torch.tensor(y_train[sub_idx] - ym, dtype=torch.float64, device=dev)
