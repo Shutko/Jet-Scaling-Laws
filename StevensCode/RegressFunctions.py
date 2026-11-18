@@ -58,7 +58,8 @@ def run_regression_sweep(X, y, train_sizes, λ=1e-8, n_repeats=250, test_size=0.
         X_test_s  = scaler.transform(X_test)
     else:
         X_train_s, X_test_s = X_train, X_test
-
+    X_train_s = X_train_s / np.linalg.norm(X_train_s, axis=1, keepdims=True)   # unit sphere, as in preprocess
+    X_test_s  = X_test_s  / np.linalg.norm(X_test_s,  axis=1, keepdims=True)
     if w_true is not None: 
         w_true = np.asarray(w_true)
         y_true_test = X_test @ w_true 
@@ -135,7 +136,8 @@ def fit_floor(P, losses, fit_min, fit_max, p0=None, fix_L_inf=None, err=None):
 def preprocess(Z): # drops constants, centers * /std
     Z = Z[:, Z.std(0) > 0]                      # drop constant columns (d=0 EFP, β=2 constants, all-zero Q entries)
     Z = (Z - Z.mean(0)) / Z.std(0)              # standardize each column
-    return Z / np.linalg.norm(Z, axis=1, keepdims=True)   # unit-normalize each event
+    Z  = Z / np.linalg.norm(Z, axis=1, keepdims=True)   # unit-normalize each event (to put on sphere, so NTK results hold ... )
+    return Z
 
 
 
